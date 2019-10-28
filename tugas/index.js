@@ -8,6 +8,16 @@
     }
   });
 
+  var state = {
+    app: {
+      eye: {
+        x: 0.20,
+        y: 0.25,
+        z: 0.25,
+      },
+    },
+  };
+
   function main() {
     // Register Callbacks
     window.addEventListener('resize', resizer);
@@ -55,15 +65,15 @@
       ];
     },
 
-    multiply_4: function (a, b){
+    multiply_4: function (a, b) {
       var c = [];
       for (let i = 0; i < 4; i++) {
         for (let j = 0; j < 4; j++) {
-          c[i*4+j]= 0;
+          c[i * 4 + j] = 0;
           for (let k = 0; k < 4; k++) {
-            c[i*4+j] += a[j+k*4]*b[i+k*4];
+            c[i * 4 + j] += a[j + k * 4] * b[i + k * 4];
           }
-        }   
+        }
       }
       return c;
       // -0.9876883625984192, 0.15643446147441864, 0, 0, 
@@ -108,6 +118,81 @@
   var ANGLE = 0;
   var ANGLE2 = 0;
 
+  var cubeVertices = [
+    // x, y, z             r, g, b
+
+    //ABCD
+    -0.5, -0.5, 0.5,  //A
+    -0.5, 0.5, 0.5,  //B
+    -0.5, 0.5, 0.5,  //B
+    0.5, 0.5, 0.5,  //C
+    0.5, 0.5, 0.5,  //C
+    0.5, -0.5, 0.5,  //D
+    0.5, -0.5, 0.5,  //D
+    -0.5, -0.5, 0.5,  //A
+
+    //DCGH
+    0.5, 0.5, 0.5,  //C
+    0.5, 0.5, -0.5,  //G
+    0.5, -0.5, 0.5,  //D
+    0.5, -0.5, -0.5,  //H
+
+    //ABFE
+    -0.5, -0.5, 0.5,  //A
+    -0.5, -0.5, -0.5,  //E
+    -0.5, 0.5, 0.5,  //B
+    -0.5, 0.5, -0.5,  //F
+
+    //EFGH
+    -0.5, -0.5, -0.5,  //E
+    -0.5, 0.5, -0.5,  //F
+    -0.5, 0.5, -0.5,  //F
+    0.5, 0.5, -0.5,  //G
+    0.5, 0.5, -0.5,  //G
+    0.5, -0.5, -0.5,  //H
+    0.5, -0.5, -0.5,  //H
+    -0.5, -0.5, -0.5  //E
+
+  ];
+
+  var p = [
+    0.0, 0.5, -0.4, 1, Math.random(), Math.random(), Math.random(), 1,
+    -0.5, -0.5, -0.4, 1, Math.random(), Math.random(), Math.random(), 1,
+    0.5, -0.5, -0.4, 1, Math.random(), Math.random(), Math.random(), 1,
+
+    // Red triangle
+    0.5, 0.4, -0.2, 1, 1, 0, 0, 1,
+    -0.5, 0.4, -0.2, 1, 1, 0, 0, 1,
+    0.0, -0.6, -0.2, 1, 1, 0, 0, 1,
+
+    0.0, 0.5, 0., 1, 0, 1, 0, 1,
+    -0.5, -0.5, 0., 1, 0, 1, 0, 1,
+    0.5, -0.5, 0., 1, 0, 1, 0, 1,
+  ];
+  var n = initVertexBuffers(p).n;
+  var mvm = glMatrix.mat4.create();
+  var pm = glMatrix.mat4.create();
+  var size = 0.3;
+
+  function initVertexBuffers(p) {
+    var vertices = new Float32Array(p);
+    vertices.stride = 8;
+    vertices.attributes = [{
+        name: 'aPosition',
+        size: 3,
+        offset: 0
+      },
+      {
+        name: 'aColor',
+        size: 3,
+        offset: 4
+      },
+    ];
+    vertices.n = vertices.length / vertices.stride;
+    // program.renderBuffers(vertices);
+    return vertices;
+  }
+
   // draw!
   function draw() {
     // Bersihkan layar jadi hitam
@@ -123,7 +208,7 @@
       -0.4, -0.9, -0.1, 0.9, 0.1, 0.9, 0.4, -0.9, 0.2, -0.9, 0.1, -0.3, -0.1, -0.3, -0.2, -0.9
     ]);
     var AInnerVertices = new Float32Array([
-        0.08, 0, -0.08, 0, 0, 0.5
+      0.08, 0, -0.08, 0, 0, 0.5
     ]);
 
     var ABoldOuterVertices = new Float32Array([
@@ -138,21 +223,48 @@
 
     var tMatrixLocation = gl.getUniformLocation(program, "t_matrix");
     var rMatrixLocation = gl.getUniformLocation(program, "r_matrix");
-    
-    ANGLE2 += 3;
+
+    //
+    var uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
+    var uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
+
+    // ModelView matrix
+    mvm = glMatrix.mat4.lookAt(mvm,
+      glMatrix.vec3.fromValues(state.app.eye.x, state.app.eye.y, state.app.eye.z),
+      glMatrix.vec3.fromValues(0, 0, 0),
+      glMatrix.vec3.fromValues(0, 1, 0)
+    );
+    // mvm = mat4.rotateX(mvm,mvm,-10);
+
+    // Projection matrix- using the orthographic "Box" view
+    // Orthographic view- no perspective
+    // mat4.ortho = function (out, left, right, bottom, top, near, far) {
+    pm = glMatrix.mat4.ortho(pm,
+      -1, 1,
+      -1, 1,
+      // 0.1, 1000
+      -100, 1000
+    );
+
+    gl.uniformMatrix4fv(uModelViewMatrix, false, mvm);
+    gl.uniformMatrix4fv(uProjectionMatrix, false, pm);
+    // gl.drawArrays(gl.TRIANGLES, 0, n);
+
+    ANGLE2 += 1;
     var radian = Math.PI * ANGLE2 / 180.0;
     var cosB = Math.cos(radian);
     var sinB = Math.sin(radian);
     var rotationMatrix = new Float32Array([
-      cosB, +sinB, 0, 0,
-      -sinB, cosB, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1,
+      cosB, 0, -sinB, 0,
+      0, 1, 0, 0,
+      sinB, 0, cosB, 0,
+      0, 0, 0, 1
     ]);
+
     
     var translationMatrix = new Float32Array([
-      1.0, 0.0, 0.0, 0.5,   // dx = 0.5
-      0.0, 1.0, 0.0, 0.0,
+      size, 0.0, 0.0, 0.0, // dx = 0.5
+      0.0, size, 0.0, 0.0,
       0.0, 0.0, 1.0, 0.0,
       0.0, 0.0, 0.0, 1.0
     ]);
@@ -163,32 +275,30 @@
 
     drawA(gl.TRIANGLES, ABoldOuterVertices);
 
-    ANGLE += 1;
-    var radian = Math.PI * ANGLE / 180.0;
-    var cosB = Math.cos(radian);
-    var sinB = Math.sin(radian);
+
     rotationMatrix = new Float32Array([
-      cosB, +sinB, 0, 0,
-      -sinB, cosB, 0, 0,
+      1, 0, 0, 0,
+      0, 1, 0, 0,
       0, 0, 1, 0,
-      0, 0, 0, 1,
+      0, 0, 0, 1
     ]);
-    
+
     translationMatrix = new Float32Array([
-      1.0, 0.0, 0.0, -0.5,   // dx = 0.5
-      0.0, 1.0, 0.0, 0.0,
+      size, 0.0, 0.0, 0.0, 
+      0.0, size, 0.0, 0.0,
       0.0, 0.0, 1.0, 0.0,
       0.0, 0.0, 0.0, 1.0
     ]);
 
-    console.log(mat.multiply_4(rotationMatrix, translationMatrix));
-
     // Set the matrix.
-    gl.uniformMatrix4fv(tMatrixLocation, false, translationMatrix);
-    gl.uniformMatrix4fv(rMatrixLocation, false, rotationMatrix);
+    // gl.uniformMatrix4fv(tMatrixLocation, false, translationMatrix);
+    // gl.uniformMatrix4fv(rMatrixLocation, false, rotationMatrix);
 
-    drawA(gl.LINE_LOOP, AOuterVertices);
-    drawA(gl.LINE_LOOP, AInnerVertices);
+    var cubeVertexBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cubeVertices), gl.STATIC_DRAW);
+
+    // drawA(gl.LINES, cubeVertices);
 
     requestAnimationFrame(draw);
   }
